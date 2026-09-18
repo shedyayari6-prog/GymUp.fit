@@ -11,6 +11,7 @@ import {
   Tooltip
 } from 'recharts'
 import { buildEarningsSeries } from '../lib/memberUtils'
+import { buildLaborCost } from '../lib/staffUtils'
 import { useLanguage } from '../context/LanguageContext'
 
 function CustomTooltip({ active, payload, label }) {
@@ -26,7 +27,7 @@ function CustomTooltip({ active, payload, label }) {
   )
 }
 
-export default function EarningsChart({ payments }) {
+export default function EarningsChart({ payments, employees = [], timeEntries = [] }) {
   const { t } = useLanguage()
   const [chartType, setChartType] = useState('area')
 
@@ -71,6 +72,13 @@ export default function EarningsChart({ payments }) {
 
     return { totalAllTime, bestMonth, avgPerMonth, avgPerMember, growthPct, projectedNext }
   }, [data])
+
+  // Labor cost for this same selected year, so revenue and staff cost are
+  // always looking at the same time window.
+  const labor = useMemo(
+    () => buildLaborCost(timeEntries, employees, selectedYear),
+    [timeEntries, employees, selectedYear]
+  )
 
   const yearSelector = (
     <select
@@ -146,6 +154,26 @@ export default function EarningsChart({ payments }) {
           )}
         </div>
       </div>
+
+      {(employees.length > 0 || timeEntries.length > 0) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div className="bg-graphite border border-steel rounded-md px-5 py-4">
+            <div className="text-chalkdim text-sm mb-1">{t('earnings.laborCost')}</div>
+            <div className="font-display text-2xl text-rust">{labor.totalCost.toFixed(2)} TND</div>
+            <div className="text-chalkdim/70 text-xs mt-1">{t('earnings.laborHours', labor.totalHours.toFixed(1))}</div>
+          </div>
+          <div className="bg-graphite border border-steel rounded-md px-5 py-4">
+            <div className="text-chalkdim text-sm mb-1">{t('earnings.netEarnings')}</div>
+            <div
+              className={`font-display text-2xl ${
+                stats.totalAllTime - labor.totalCost >= 0 ? 'text-good' : 'text-rust'
+              }`}
+            >
+              {(stats.totalAllTime - labor.totalCost).toFixed(2)} TND
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-graphite border border-steel rounded-md px-5 py-4 mb-6 flex items-center justify-between gap-4 flex-wrap">
         <div>

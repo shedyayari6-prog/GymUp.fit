@@ -11,6 +11,7 @@ export default function Sidebar({ current, onChange, gymName, ownerId, expiredCo
   const TABS = [
     { id: 'active', label: t('sidebar.tabActive') },
     { id: 'expired', label: t('sidebar.tabExpired') },
+    { id: 'staff', label: t('sidebar.tabStaff') },
     { id: 'earnings', label: t('sidebar.tabEarnings') }
   ]
 

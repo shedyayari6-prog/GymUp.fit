@@ -15,10 +15,14 @@ import MemberDetailModal from '../components/MemberDetailModal'
 import AgeBreakdownChart from '../components/AgeBreakdownChart'
 import RenewalRateWidget from '../components/RenewalRateWidget'
 import QuickNotes from '../components/QuickNotes'
+import EmployeeModal from '../components/EmployeeModal'
+import ClockStation from '../components/ClockStation'
+import StaffTable from '../components/StaffTable'
+import MyHoursPanel from '../components/MyHoursPanel'
 import { membershipStatus } from '../lib/memberUtils'
 
 // ---------- Earnings Password Gate (inline component) ----------
-function EarningsPasswordGate({ ownerId, onUnlock, forceSetup = false }) {
+function EarningsPasswordGate({ ownerId, onUnlock, forceSetup = false, lockedTitleKey = 'earnings.lockedTitle', lockedHintKey = 'earnings.lockedHint' }) {
   const { t } = useLanguage()
   const [storedPassword, setStoredPassword] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -89,10 +93,10 @@ function EarningsPasswordGate({ ownerId, onUnlock, forceSetup = false }) {
   return (
     <div className="max-w-md mx-auto mt-16 bg-steel/40 border border-steel rounded-lg p-8">
       <h2 className="font-display text-2xl text-chalk mb-2">
-        {setupMode ? t('earnings.setupTitle') : t('earnings.lockedTitle')}
+        {setupMode ? t('earnings.setupTitle') : t(lockedTitleKey)}
       </h2>
       <p className="text-chalkdim text-sm mb-6">
-        {setupMode ? t('earnings.setupHint') : t('earnings.lockedHint')}
+        {setupMode ? t('earnings.setupHint') : t(lockedHintKey)}
       </p>
 
       <form onSubmit={setupMode ? handleSetPassword : handleUnlock} className="space-y-4">
@@ -131,12 +135,17 @@ export default function Dashboard() {
   const { t } = useLanguage()
   const [members, setMembers] = useState([])
   const [payments, setPayments] = useState([])
+  const [employees, setEmployees] = useState([])
+  const [timeEntries, setTimeEntries] = useState([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('active')
   const [modalOpen, setModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState('edit')
   const [editingMember, setEditingMember] = useState(null)
   const [detailMember, setDetailMember] = useState(null)
+  const [employeeModalOpen, setEmployeeModalOpen] = useState(false)
+  const [editingEmployee, setEditingEmployee] = useState(null)
+  const [staffUnlocked, setStaffUnlocked] = useState(false)
 
   // Earnings password gate state
   const [earningsUnlocked, setEarningsUnlocked] = useState(false)
@@ -162,16 +171,37 @@ export default function Dashboard() {
     if (!error) setPayments(data ?? [])
   }
 
+  async function fetchEmployees() {
+    const { data, error } = await supabase
+      .from('employees')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (!error) setEmployees(data ?? [])
+  }
+
+  async function fetchTimeEntries() {
+    const { data, error } = await supabase
+      .from('time_entries')
+      .select('*')
+      .order('clock_in', { ascending: false })
+    if (!error) setTimeEntries(data ?? [])
+  }
+
   useEffect(() => {
     fetchMembers()
     fetchPayments()
+    fetchEmployees()
+    fetchTimeEntries()
   }, [])
 
-  // Re-lock earnings whenever the user leaves the tab
+  // Re-lock earnings and the staff wage roster whenever the user leaves the tab
   useEffect(() => {
     if (tab !== 'earnings') {
       setEarningsUnlocked(false)
       setChangingPassword(false)
+    }
+    if (tab !== 'staff') {
+      setStaffUnlocked(false)
     }
   }, [tab])
 
@@ -257,6 +287,32 @@ export default function Dashboard() {
     await handleDelete(member)
   }
 
+  function openAddEmployee() {
+    setEditingEmployee(null)
+    setEmployeeModalOpen(true)
+  }
+
+  function openEditEmployee(employee) {
+    setEditingEmployee(employee)
+    setEmployeeModalOpen(true)
+  }
+
+  async function handleDeleteEmployee(employee) {
+    if (!confirm(t('staff.confirmDelete', employee.name))) return
+    const { error } = await supabase.from('employees').delete().eq('id', employee.id)
+    if (error) {
+      console.error('Delete employee failed:', error.message)
+      return
+    }
+    fetchEmployees()
+  }
+
+  function handleEmployeeSaved() {
+    setEmployeeModalOpen(false)
+    setEditingEmployee(null)
+    fetchEmployees()
+  }
+
   return (
     <div className="min-h-screen bg-ink flex">
       <Sidebar
@@ -274,15 +330,26 @@ export default function Dashboard() {
             <h1 className="font-display text-3xl text-chalk shrink-0">
               {tab === 'active' && t('dashboard.headingActive')}
               {tab === 'expired' && t('dashboard.headingExpired')}
+              {tab === 'staff' && t('sidebar.tabStaff')}
               {tab === 'earnings' && t('dashboard.headingEarnings')}
             </h1>
-            <MemberSearch members={members} onSelect={openDetailFromSearch} />
-            {tab !== 'earnings' && (
+            {(tab === 'active' || tab === 'expired') && (
+              <MemberSearch members={members} onSelect={openDetailFromSearch} />
+            )}
+            {(tab === 'active' || tab === 'expired') && (
               <button
                 onClick={openAddModal}
                 className="bg-brass hover:bg-brasslight transition-colors text-ink font-semibold px-5 py-2.5 rounded-md shrink-0"
               >
                 {t('dashboard.addMember')}
+              </button>
+            )}
+            {tab === 'staff' && staffUnlocked && (
+              <button
+                onClick={openAddEmployee}
+                className="bg-brass hover:bg-brasslight transition-colors text-ink font-semibold px-5 py-2.5 rounded-md shrink-0"
+              >
+                {t('staff.addEmployee')}
               </button>
             )}
             {tab === 'earnings' && earningsUnlocked && !changingPassword && (
@@ -325,6 +392,37 @@ export default function Dashboard() {
             </>
           )}
 
+          {tab === 'staff' && (
+            <>
+              <ClockStation
+                employees={employees}
+                timeEntries={timeEntries}
+                ownerId={user?.id}
+                onChanged={fetchTimeEntries}
+              />
+              <div className="mt-6">
+                <MyHoursPanel employees={employees} timeEntries={timeEntries} />
+              </div>
+              <div className="mt-6">
+                {staffUnlocked ? (
+                  <StaffTable
+                    employees={employees}
+                    timeEntries={timeEntries}
+                    onEdit={openEditEmployee}
+                    onDelete={handleDeleteEmployee}
+                  />
+                ) : (
+                  <EarningsPasswordGate
+                    ownerId={user.id}
+                    onUnlock={() => setStaffUnlocked(true)}
+                    lockedTitleKey="staff.wageLockedTitle"
+                    lockedHintKey="staff.wageLockedHint"
+                  />
+                )}
+              </div>
+            </>
+          )}
+
           {tab === 'earnings' && (
             <>
               {changingPassword ? (
@@ -343,7 +441,7 @@ export default function Dashboard() {
                 />
               ) : (
                 <>
-                  <EarningsChart payments={payments} />
+                  <EarningsChart payments={payments} employees={employees} timeEntries={timeEntries} />
                   <div className="mt-10">
                     <LoyaltyChart payments={payments} />
                   </div>
@@ -367,6 +465,15 @@ export default function Dashboard() {
           mode={modalMode}
           onClose={() => setModalOpen(false)}
           onSaved={handleSaved}
+        />
+      )}
+
+      {employeeModalOpen && (
+        <EmployeeModal
+          existing={editingEmployee}
+          ownerId={user.id}
+          onClose={() => setEmployeeModalOpen(false)}
+          onSaved={handleEmployeeSaved}
         />
       )}
 

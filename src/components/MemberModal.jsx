@@ -18,6 +18,7 @@ export default function MemberModal({ existing, ownerId, mode = 'edit', onClose,
   const [name, setName] = useState(existing?.name ?? '')
   const [age, setAge] = useState(existing?.age ?? '')
   const [phone, setPhone] = useState(existing?.phone ?? '')
+  const [email, setEmail] = useState(existing?.email ?? '')
   const [price, setPrice] = useState(existing?.membership_price ?? '')
   const [startDate, setStartDate] = useState(existing?.start_date ?? todayStr())
   const [duration, setDuration] = useState(existing?.duration_months ?? 1)
@@ -96,6 +97,7 @@ export default function MemberModal({ existing, ownerId, mode = 'edit', onClose,
         name,
         age: age === '' ? null : Number(age),
         phone: phone === '' ? null : phone,
+        email: email === '' ? null : email,
         membership_price: amount,
         start_date: effectiveStart,
         duration_months: effectiveDuration,
@@ -178,6 +180,18 @@ export default function MemberModal({ existing, ownerId, mode = 'edit', onClose,
               placeholder="+216 12 345 678"
               className="w-full rounded-md bg-ink border border-steel px-3 py-2 text-chalk focus:border-brass outline-none"
             />
+          </div>
+
+          <div>
+            <label className="block text-chalkdim text-sm mb-1">{t('memberModal.email')}</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="member@example.com"
+              className="w-full rounded-md bg-ink border border-steel px-3 py-2 text-chalk focus:border-brass outline-none"
+            />
+            <p className="text-chalkdim/60 text-xs mt-1">{t('memberModal.emailHint')}</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
